@@ -13,6 +13,7 @@ export default function App() {
   const [phase, setPhase] = useState('idle'); // idle | shaking | answered
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const runAsk = async (raw) => {
     const q = raw.trim();
@@ -61,6 +62,25 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const copyLink = async () => {
+    const q = (result?.question || question).trim();
+    if (!q) return;
+    const url = `${window.location.origin}/?q=${encodeURIComponent(q)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // clipboard API is blocked on plain http (LAN) — fall back
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const shaking = phase === 'shaking';
   const v = result ? VERDICT_STYLES[result.verdict] || VERDICT_STYLES.neutral : null;
@@ -123,6 +143,23 @@ export default function App() {
               </li>
             ))}
           </ul>
+          <button
+            type="button"
+            className="share-btn"
+            onClick={copyLink}
+            style={{
+              marginTop: 12,
+              cursor: 'pointer',
+              background: 'none',
+              border: '1px solid rgba(255,255,255,.25)',
+              color: 'inherit',
+              borderRadius: 8,
+              padding: '6px 14px',
+              fontSize: '0.9rem',
+            }}
+          >
+            {copied ? '✅ Link copied' : '🔗 Copy share link'}
+          </button>
           <p className="powered">ranked &amp; judged by <strong>JEV LATEST</strong> (1.13) · context by DeepSeek Flash · via OpenRouter</p>
         </div>
       )}
