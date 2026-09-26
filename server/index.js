@@ -115,7 +115,7 @@ const PHRASES = {
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-async function fetchJson(url, body, timeoutMs = 25000) {
+async function fetchJson(url, body, timeoutMs = 35000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -209,7 +209,7 @@ async function jevRank(question, criteria, gate) {
   const gateScore = typeof gateNoul === 'number'
     ? Math.max(0, Math.min(10, Math.round(gateNoul * 10)))
     : 5;
-  return { criteria: out, gateScore, jev: data.model || MODEL, usage: data.usage || null };
+  return { criteria: out, gateScore, gateNoul: typeof gateNoul === 'number' ? gateNoul : null, jev: data.model || MODEL, usage: data.usage || null };
 }
 
 // Stage 3 — JEV pass 2: weigh all state (question + every score + its context +
@@ -249,6 +249,25 @@ async function jevVerdict(question, ranked, gate, gateScore) {
   return { category: choice, jev: data.model || MODEL, confidence: data.answers?.category?.confidence, usage: data.usage || null };
 }
 
+// Stage 4 -- cheap model: one plain factual sentence explaining the verdict.
+async function writeSummary(question, ranked, gate, gateScore, category) {
+  const lines = ranked.map(c => c.label + ': ' + c.score + '/10 - ' + c.context).join('\n');
+  const system = 'You summarise decision verdicts. Write ONE plain, factual sentence (max 30 words) explaining the verdict, naming the 1-2 most decisive factors. No mysticism, no emojis, no preamble.';
+  const user = 'Question: ' + question + '\nVerdict: ' + category + '\nScores:\n' + lines + '\n' + gate.label + ' impermissibility: ' + gateScore + '/10 - ' + gate.context;
+  const data = await fetchJson(CHAT_URL, {
+    model: CHEAP_MODEL,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    temperature: 0.6,
+    max_tokens: 1000,
+    reasoning: { effort: 'low' },
+  });
+  const out = (data?.choices?.[0]?.message?.content || '').trim();
+  if (!out) throw new Error('empty summary');
+  return out.slice(0, 240);
+}
 app.post('/api/ask', async (req, res) => {
   const question = (req.body?.question || '').trim();
   if (!question) return res.status(400).json({ error: 'The ball needs a question.' });
@@ -268,19 +287,25 @@ app.post('/api/ask', async (req, res) => {
     }
 
     // Stage 2: JEV scores every criterion + the gate noul.
-    const { criteria: ranked, gateScore, jev: jev1 } = await jevRank(question, interpreted.criteria, interpreted.gate);
+    const { criteria: ranked, gateScore, gateNoul, jev: jev1 } = await jevRank(question, interpreted.criteria, interpreted.gate);
 
     // Stage 3: another JEV pass weighs all state and picks the category.
     const { category, jev: jev2, confidence } = await jevVerdict(question, ranked, interpreted.gate, gateScore);
+
+    let summary;
+    try {
+      summary = await writeSummary(question, ranked, interpreted.gate, gateScore, category);
+    } catch (err) {
+      console.error('summary failed:', err.message);
+    }
 
     res.json({
       question,
       answer: pick(PHRASES[category]),
       verdict: category,
-      criteria: [
-        ...ranked.map(c => ({ id: c.id, label: c.label, score: c.score, reason: c.context, description: c.desc })),
-        { id: GATE.id, label: GATE.label, score: gateScore, reason: interpreted.gate.context, description: GATE.desc },
-      ],
+      summary,
+      criteria: ranked.map(c => ({ id: c.id, label: c.label, score: c.score, reason: c.context, description: c.desc })),
+      gate: { id: GATE.id, label: GATE.label, score: gateScore, probability: gateNoul, reason: interpreted.gate.context, description: GATE.desc },
       confidence,
       model: `${jev2} + ${CHEAP_MODEL}`,
     });

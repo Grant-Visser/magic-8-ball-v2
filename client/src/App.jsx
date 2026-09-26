@@ -87,6 +87,8 @@ export default function App() {
 
   const shaking = phase === 'shaking';
   const v = result ? VERDICT_STYLES[result.verdict] || VERDICT_STYLES.neutral : null;
+  const gatePct = result?.gate ? Math.round((result.gate.probability ?? result.gate.score / 10) * 100) : null;
+  const gateColor = gatePct == null ? null : gatePct >= 70 ? '#ff5c7a' : gatePct >= 30 ? '#f5c542' : '#39d98a';
 
   return (
     <div className="app">
@@ -157,6 +159,7 @@ export default function App() {
                   <span className="crit-label">{c.label}</span>
                   <span className="crit-score">{c.score}/10</span>
                 </div>
+                {c.description && <p style={{ margin: '2px 0 6px', fontSize: '0.75rem', opacity: 0.55 }}>{c.description}</p>}
                 <div className="bar">
                   <div
                     className={'fill' + (BAD_HIGH.has(c.id) ? ' bad' : '')}
@@ -167,6 +170,13 @@ export default function App() {
               </li>
             ))}
           </ul>
+          {result.gate && (
+            <p style={{ margin: '12px 0 0', fontSize: '0.85rem' }} title={result.gate.description}>
+              🛑 {result.gate.label}:{' '}
+              <strong style={{ color: gateColor }}>{gatePct}% impermissible</strong>
+              {' '}— weighed into the verdict, never a veto
+            </p>
+          )}
           <p className="powered">ranked &amp; judged by <strong>JEV LATEST</strong> (1.13) · context by DeepSeek Flash · via OpenRouter</p>
         </div>
       )}
