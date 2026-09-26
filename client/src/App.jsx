@@ -108,7 +108,7 @@ export default function App() {
               </li>
             ))}
           </ul>
-          <p className="powered">judged by <strong>JEV Router</strong> via OpenRouter</p>
+          <p className="powered">ranked &amp; judged by <strong>JEV LATEST</strong> (1.13) · context by gpt-5-nano · via OpenRouter</p>
         </div>
       )}
 
