@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 
 const SHAKE_MS = 1100;
 
+// Criteria where a HIGH score is bad (red bar). Everything else: high = good.
+const BAD_HIGH = new Set(['downside_severity', 'risk_of_ruin', 'ethics_legality']);
+
 const VERDICT_STYLES = {
   affirmative: { glow: '#39d98a', label: '✅ Affirmative' },
   neutral: { glow: '#f5c542', label: '🤔 Unclear' },
@@ -156,7 +159,7 @@ export default function App() {
                 </div>
                 <div className="bar">
                   <div
-                    className={'fill' + (c.id === 'certainty_of_catastrophe' ? ' bad' : '')}
+                    className={'fill' + (BAD_HIGH.has(c.id) ? ' bad' : '')}
                     style={{ width: `${c.score * 10}%` }}
                   />
                 </div>

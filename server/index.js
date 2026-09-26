@@ -10,8 +10,8 @@ app.use(express.json());
 
 // JEV LATEST = the TypeSafe decision model (currently 1.13) via the Decisions API.
 const MODEL = process.env.JEV_MODEL || '~typesafe/jev-latest';
-// Cheap chat model: only provides per-criterion context + oracle prose. JEV does all judging.
-const CHEAP_MODEL = process.env.CHEAP_MODEL || 'openai/gpt-5-nano';
+// Cheap chat model: only provides per-criterion context. JEV does all judging.
+const CHEAP_MODEL = process.env.CHEAP_MODEL || '~deepseek/deepseek-flash-latest';
 const PORT = process.env.PORT || 8787;
 const DECISIONS_URL = 'https://openrouter.ai/api/alpha/decisions';
 const CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -25,25 +25,76 @@ const COMMON_HEADERS = {
   'X-Title': 'Magic 8 Ball v2',
 };
 
-// Fixed decision framing — identical logical criteria on every shake.
-// "ask" is the JEV scoring question; every criterion is scored on ONE favourability
-// scale (high = argues for proceeding), so pass 2 can roll the scores up directly.
+// Fixed decision framing — 10 scored criteria + 1 noul-style gate.
+// scale: 'fav' = high is good (favourability). 'risk' = high is bad (risk level).
+// Pass 2 sees risk criteria inverted (10 - risk) so it always reasons in favourability.
+// The gate is NEVER a hard veto — its probability is handed to pass 2 to weigh.
 const CRITERIA = [
-  { id: 'ethics', label: 'Ethics', ask: 'How ethically sound is pursuing this?' },
-  { id: 'morality', label: 'Morality', ask: 'How morally upright is the intent?' },
-  { id: 'likelihood_of_success', label: 'Success Odds', ask: 'How likely is the asker to succeed?' },
-  { id: 'certainty_of_catastrophe', label: 'Catastrophe', ask: 'How likely is disaster or serious harm if the asker proceeds?' },
-  { id: 'timing', label: 'Timing', ask: 'How favourable is the timing right now?' },
-  { id: 'ripple_effects', label: 'Ripple Effects', ask: 'How manageable are the downstream consequences?' },
+  { id: 'upside', label: 'Upside', scale: 'fav',
+    ask: 'How good is the realistic good outcome compared with the cost of trying?',
+    desc: 'How good is the realistic good outcome vs the cost of trying?' },
+  { id: 'downside_severity', label: 'Downside Severity', scale: 'risk',
+    ask: 'How severe is the realistic worst-case outcome?',
+    desc: 'How bad is the realistic worst case? High = severe.' },
+  { id: 'risk_of_ruin', label: 'Risk of Ruin', scale: 'risk',
+    ask: 'If the worst case happens, how unrecoverable is the loss?',
+    desc: 'Can the bad case be recovered from, or is it permanent loss? High = unrecoverable.' },
+  { id: 'base_rate_odds', label: 'Base-Rate Odds', scale: 'fav',
+    ask: 'How often do attempts like this one actually succeed?',
+    desc: 'How often do attempts like this actually succeed? Reference-class reality, not vibes.' },
+  { id: 'evidence_quality', label: 'Evidence Quality', scale: 'fav',
+    ask: 'How much do we actually know about the facts that matter here, versus guessing?',
+    desc: 'Are we reasoning from knowledge or guessing?' },
+  { id: 'reversibility', label: 'Reversibility', scale: 'fav',
+    ask: 'If it goes wrong or the asker changes their mind, how cheaply can they back out?',
+    desc: 'One-way door or two-way door? Can you back out cheaply?' },
+  { id: 'opportunity_cost', label: 'Opportunity Cost', scale: 'fav',
+    ask: 'How acceptable is what the asker gives up by proceeding (time, money, alternatives)?',
+    desc: 'What does yes preclude (time, money, alternatives)? High = acceptable.' },
+  { id: 'competence', label: 'Competence & Preparation', scale: 'fav',
+    ask: "Do the asker's skills, resources and preparation fit this specific pursuit?",
+    desc: 'Does the asker have the skill, resources and setup for this specifically?' },
+  { id: 'option_value_of_waiting', label: 'Option Value of Waiting', scale: 'fav',
+    ask: 'How clearly is acting now better than waiting for more information?',
+    desc: 'Would delaying produce better information? High = act now.' },
+  { id: 'motivation', label: 'Motivation & Energy', scale: 'fav',
+    ask: "How strong are the asker's want and readiness to execute this?",
+    desc: 'Does the asker actually want this, and are they in a state to execute?' },
+];
+
+const GATE = {
+  id: 'ethics_legality', label: 'Ethics & Legality',
+  ask: 'Is pursuing this impermissible, illegal, or seriously unethical?',
+  desc: 'Impermissible or illegal? Weighed by the final pass, never a hard veto.',
+};
+
+const FAV_SCALE = [
+  'Very unfavourable — strongly argues against proceeding',
+  'Unfavourable — leans against proceeding',
+  'Mixed or unclear',
+  'Favourable — leans toward proceeding',
+  'Very favourable — strongly argues for proceeding',
+];
+const RISK_SCALE = [
+  'Almost none — negligible severity or fully recoverable',
+  'Low — minor or easily recovered',
+  'Unclear or situational',
+  'Elevated — serious harm, loss, or hard to undo',
+  'Severe — disaster, permanent loss, or unrecoverable',
 ];
 
 const DEFAULT_CONTEXT = {
-  ethics: 'Acting on this aligns with sound ethical principles.',
-  morality: 'The intent sits well with a common moral conscience.',
-  likelihood_of_success: 'A good outcome is probable if the asker proceeds.',
-  certainty_of_catastrophe: 'Disaster is likely if the asker proceeds.',
-  timing: 'Now is the right moment to act.',
-  ripple_effects: 'Downstream consequences stay manageable.',
+  upside: 'The realistic good outcome clearly outweighs the cost of trying.',
+  downside_severity: 'The realistic worst case is serious if the asker proceeds.',
+  risk_of_ruin: 'The worst case would be permanent or unrecoverable loss.',
+  base_rate_odds: 'Attempts like this usually succeed.',
+  evidence_quality: 'We are reasoning from solid knowledge rather than guessing.',
+  reversibility: 'The asker can back out cheaply if it goes wrong.',
+  opportunity_cost: 'What is given up by proceeding is acceptable.',
+  competence: 'The asker has the skill, resources and preparation for this.',
+  option_value_of_waiting: 'Acting now is clearly better than waiting.',
+  motivation: 'The asker wants this and is in a state to execute.',
+  ethics_legality: 'Pursuing this is impermissible, illegal, or seriously unethical.',
 };
 
 const PHRASES = {
@@ -84,13 +135,13 @@ async function fetchJson(url, body, timeoutMs = 25000) {
   }
 }
 
-// Stage 1 — cheap chat model: add question-specific context and prose to the FIXED criteria.
-// It never invents criteria; it only fills in context (what favourability means here)
-// for the user's question. No oracle prose.
+// Stage 1 — cheap chat model: adds question-specific context to the FIXED criteria.
+// It never invents criteria; it only fills in context for the user's question.
 async function interpretQuestion(question) {
   const system = `You add context to the fixed decision criteria of a Magic 8 Ball oracle.
 The user asks a question. For EACH of these criteria, write how it applies to this question:
 ${CRITERIA.map(c => `- ${c.id} (${c.label}): ${c.ask}`).join('\n')}
+- ${GATE.id} (${GATE.label}): ${GATE.ask}
 
 For each criterion give:
 - "id": the criterion id, exactly as listed above (no new criteria)
@@ -106,47 +157,44 @@ Respond ONLY with JSON, no markdown:
     response_format: { type: 'json_object' },
     temperature: 0.9,
     max_tokens: 3000,
-    reasoning: { effort: 'low' },
   });
   const raw = data?.choices?.[0]?.message?.content || '';
   const parsed = JSON.parse(raw.replace(/```json\s*|```\s*/g, '').trim());
+  const allIds = [...CRITERIA.map(c => c.id), GATE.id];
   const byId = new Map((Array.isArray(parsed.criteria) ? parsed.criteria : [])
-    .filter(c => c && CRITERIA.some(k => k.id === c.id))
+    .filter(c => c && allIds.includes(c.id))
     .map(c => [c.id, c]));
   const criteria = CRITERIA.map(k => ({
     ...k,
     context: String(byId.get(k.id)?.context || DEFAULT_CONTEXT[k.id]).slice(0, 220),
   }));
-  const filled = criteria.filter(c => byId.has(c.id)).length;
+  const gate = {
+    ...GATE,
+    context: String(byId.get(GATE.id)?.context || DEFAULT_CONTEXT[GATE.id]).slice(0, 220),
+  };
+  const filled = criteria.filter(c => byId.has(c.id)).length + (byId.has(GATE.id) ? 1 : 0);
   if (!filled) throw new Error('interpreter returned no usable criteria');
-  return { criteria };
+  return { criteria, gate };
 }
 
-// Stage 2 — JEV pass 1: rank every criterion on the same favourability scale.
-async function jevRank(question, criteria) {
+// Stage 2 — JEV pass 1: score every criterion + the impermissibility noul.
+async function jevRank(question, criteria, gate) {
   const questions = {};
   for (const c of criteria) {
-    const isCat = c.id === 'certainty_of_catastrophe';
     questions[`rank_${c.id}`] = {
       type: 'score',
       instructions: `${c.ask} Question context: ${c.context}`,
-      // catastrophe is scored on a RISK scale (high = bad); everything else
-      // on a favourability scale (high = good). Pass 2 inverts it back.
-      criteria: isCat ? [
-        'Almost no risk — nothing dangerous about proceeding',
-        'Low risk — minor downsides at worst',
-        'Unclear or situational risk',
-        'Elevated risk — real chance of harm or loss',
-        'Disaster almost certain — severe harm or loss likely',
-      ] : [
-        'Very unfavourable — strongly argues against proceeding',
-        'Unfavourable — leans against proceeding',
-        'Mixed or unclear',
-        'Favourable — leans toward proceeding',
-        'Very favourable — strongly argues for proceeding',
-      ],
+      criteria: c.scale === 'risk' ? RISK_SCALE : FAV_SCALE,
     };
   }
+  questions[`gate_${GATE.id}`] = {
+    type: 'noul',
+    instructions: `${GATE.ask} Question context: ${gate.context}`,
+    criteria: {
+      true: 'Impermissible, illegal, or seriously unethical to pursue',
+      false: 'Permissible and within ordinary moral bounds',
+    },
+  };
   const data = await fetchJson(DECISIONS_URL, {
     model: MODEL,
     state: { question },
@@ -157,12 +205,17 @@ async function jevRank(question, criteria) {
     const s = typeof a?.score === 'number' ? a.score : 2;
     return { ...c, score: Math.max(0, Math.min(10, Math.round((s / 4) * 10))) };
   });
-  return { criteria: out, jev: data.model || MODEL, usage: data.usage || null };
+  const gateNoul = data.answers?.[`gate_${GATE.id}`]?.noul;
+  const gateScore = typeof gateNoul === 'number'
+    ? Math.max(0, Math.min(10, Math.round(gateNoul * 10)))
+    : 5;
+  return { criteria: out, gateScore, jev: data.model || MODEL, usage: data.usage || null };
 }
 
-// Stage 3 — JEV pass 2: weigh all state (question + every score + its context)
-// and choose the response category.
-async function jevVerdict(question, ranked) {
+// Stage 3 — JEV pass 2: weigh all state (question + every score + its context +
+// the gate probability) and choose the response category. The gate is a factor,
+// never a hard veto.
+async function jevVerdict(question, ranked, gate, gateScore) {
   const data = await fetchJson(DECISIONS_URL, {
     model: MODEL,
     state: {
@@ -170,13 +223,19 @@ async function jevVerdict(question, ranked) {
       evaluations: ranked.map(c => ({
         criterion: c.label,
         context: c.context,
-        favourability_0_to_10: c.id === 'certainty_of_catastrophe' ? 10 - c.score : c.score,
+        favourability_0_to_10: c.scale === 'risk' ? 10 - c.score : c.score,
       })),
+      gate: {
+        criterion: GATE.label,
+        context: gate.context,
+        impermissibility_0_to_10: gateScore,
+        note: 'Weigh this strongly. Only near-certain impermissibility should force negative.',
+      },
     },
     questions: {
       category: {
         type: 'choice',
-        instructions: `Weigh every evaluation and choose the overall answer category for the asker's question: "${question}". High catastrophe risk or strongly negative ethics/morality must never yield affirmative.`,
+        instructions: `Weigh every evaluation and the gate, then choose the overall answer category for the asker's question: "${question}". The gate is a serious factor but not an absolute veto; only near-certain impermissibility should yield negative.`,
         criteria: {
           affirmative: 'The ask should go ahead — the signs favour it.',
           neutral: 'It is unclear, badly timed, or genuinely undecidable — the ball withholds.',
@@ -204,21 +263,24 @@ app.post('/api/ask', async (req, res) => {
       console.error('interpret failed:', err.message);
       interpreted = {
         criteria: CRITERIA.map(c => ({ ...c, context: DEFAULT_CONTEXT[c.id] })),
+        gate: { ...GATE, context: DEFAULT_CONTEXT[GATE.id] },
       };
     }
 
-    // Stage 2: JEV ranks every criterion.
-    const { criteria: ranked, jev: jev1 } = await jevRank(question, interpreted.criteria);
+    // Stage 2: JEV scores every criterion + the gate noul.
+    const { criteria: ranked, gateScore, jev: jev1 } = await jevRank(question, interpreted.criteria, interpreted.gate);
 
     // Stage 3: another JEV pass weighs all state and picks the category.
-    const { category, jev: jev2, confidence } = await jevVerdict(question, ranked);
+    const { category, jev: jev2, confidence } = await jevVerdict(question, ranked, interpreted.gate, gateScore);
 
     res.json({
       question,
       answer: pick(PHRASES[category]),
       verdict: category,
-      criteria: ranked.map(c => ({ id: c.id, label: c.label, score: c.score, reason: c.context })),
-      context: ranked.map(c => ({ id: c.id, context: c.context })),
+      criteria: [
+        ...ranked.map(c => ({ id: c.id, label: c.label, score: c.score, reason: c.context, description: c.desc })),
+        { id: GATE.id, label: GATE.label, score: gateScore, reason: interpreted.gate.context, description: GATE.desc },
+      ],
       confidence,
       model: `${jev2} + ${CHEAP_MODEL}`,
     });
