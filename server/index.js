@@ -86,7 +86,7 @@ async function fetchJson(url, body, timeoutMs = 25000) {
 
 // Stage 1 — cheap chat model: add question-specific context and prose to the FIXED criteria.
 // It never invents criteria; it only fills in context (what favourability means here)
-// and a cryptic note per criterion, plus a prelude line.
+// for the user's question. No oracle prose.
 async function interpretQuestion(question) {
   const system = `You add context to the fixed decision criteria of a Magic 8 Ball oracle.
 The user asks a question. For EACH of these criteria, write how it applies to this question:
@@ -94,11 +94,9 @@ ${CRITERIA.map(c => `- ${c.id} (${c.label}): ${c.ask}`).join('\n')}
 
 For each criterion give:
 - "id": the criterion id, exactly as listed above (no new criteria)
-- "context": one sentence, specific to the question, saying what a HIGH (favourable) score means here
-- "note": one cryptic oracle-style line (max ~80 chars) about this criterion, shown to the asker
-Also give "prelude": one cryptic mystical line (max ~90 chars) about the question's stakes, shown before the verdict.
+- "context": one plain, factual sentence specific to the question, saying what a HIGH (favourable) score means here. No mysticism, no flowery language.
 Respond ONLY with JSON, no markdown:
-{"prelude":"...","criteria":[{"id":"...","context":"...","note":"..."}]}`;
+{"criteria":[{"id":"...","context":"..."}]}`;
   const data = await fetchJson(CHAT_URL, {
     model: CHEAP_MODEL,
     messages: [
@@ -118,11 +116,10 @@ Respond ONLY with JSON, no markdown:
   const criteria = CRITERIA.map(k => ({
     ...k,
     context: String(byId.get(k.id)?.context || DEFAULT_CONTEXT[k.id]).slice(0, 220),
-    note: String(byId.get(k.id)?.note || '').slice(0, 120),
   }));
   const filled = criteria.filter(c => byId.has(c.id)).length;
   if (!filled) throw new Error('interpreter returned no usable criteria');
-  return { prelude: String(parsed.prelude || '').slice(0, 140), criteria };
+  return { criteria };
 }
 
 // Stage 2 — JEV pass 1: rank every criterion on the same favourability scale.
@@ -197,7 +194,6 @@ app.post('/api/ask', async (req, res) => {
     } catch (err) {
       console.error('interpret failed:', err.message);
       interpreted = {
-        prelude: 'The mists settle around a familiar shape.',
         criteria: CRITERIA.map(c => ({ ...c, context: DEFAULT_CONTEXT[c.id] })),
       };
     }
@@ -212,8 +208,7 @@ app.post('/api/ask', async (req, res) => {
       question,
       answer: pick(PHRASES[category]),
       verdict: category,
-      summary: interpreted.prelude,
-      criteria: ranked.map(c => ({ id: c.id, label: c.label, score: c.score, reason: c.note || c.context })),
+      criteria: ranked.map(c => ({ id: c.id, label: c.label, score: c.score, reason: c.context })),
       context: ranked.map(c => ({ id: c.id, context: c.context })),
       confidence,
       model: `${jev2} + ${CHEAP_MODEL}`,
