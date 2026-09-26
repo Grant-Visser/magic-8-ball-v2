@@ -32,7 +32,7 @@ const CRITERIA = [
   { id: 'ethics', label: 'Ethics', ask: 'How ethically sound is pursuing this?' },
   { id: 'morality', label: 'Morality', ask: 'How morally upright is the intent?' },
   { id: 'likelihood_of_success', label: 'Success Odds', ask: 'How likely is the asker to succeed?' },
-  { id: 'certainty_of_catastrophe', label: 'Catastrophe', ask: 'How favourable is the risk outlook? A low chance of disaster scores high.' },
+  { id: 'certainty_of_catastrophe', label: 'Catastrophe', ask: 'How likely is disaster or serious harm if the asker proceeds?' },
   { id: 'timing', label: 'Timing', ask: 'How favourable is the timing right now?' },
   { id: 'ripple_effects', label: 'Ripple Effects', ask: 'How manageable are the downstream consequences?' },
 ];
@@ -41,7 +41,7 @@ const DEFAULT_CONTEXT = {
   ethics: 'Acting on this aligns with sound ethical principles.',
   morality: 'The intent sits well with a common moral conscience.',
   likelihood_of_success: 'A good outcome is probable if the asker proceeds.',
-  certainty_of_catastrophe: 'Disaster is unlikely if the asker proceeds.',
+  certainty_of_catastrophe: 'Disaster is likely if the asker proceeds.',
   timing: 'Now is the right moment to act.',
   ripple_effects: 'Downstream consequences stay manageable.',
 };
@@ -94,7 +94,7 @@ ${CRITERIA.map(c => `- ${c.id} (${c.label}): ${c.ask}`).join('\n')}
 
 For each criterion give:
 - "id": the criterion id, exactly as listed above (no new criteria)
-- "context": one plain, factual sentence specific to the question, saying what a HIGH (favourable) score means here. No mysticism, no flowery language.
+- "context": one plain, factual sentence specific to the question, saying what a high score on this criterion means here. No mysticism, no flowery language.
 Respond ONLY with JSON, no markdown:
 {"criteria":[{"id":"...","context":"..."}]}`;
   const data = await fetchJson(CHAT_URL, {
@@ -126,10 +126,19 @@ Respond ONLY with JSON, no markdown:
 async function jevRank(question, criteria) {
   const questions = {};
   for (const c of criteria) {
+    const isCat = c.id === 'certainty_of_catastrophe';
     questions[`rank_${c.id}`] = {
       type: 'score',
       instructions: `${c.ask} Question context: ${c.context}`,
-      criteria: [
+      // catastrophe is scored on a RISK scale (high = bad); everything else
+      // on a favourability scale (high = good). Pass 2 inverts it back.
+      criteria: isCat ? [
+        'Almost no risk — nothing dangerous about proceeding',
+        'Low risk — minor downsides at worst',
+        'Unclear or situational risk',
+        'Elevated risk — real chance of harm or loss',
+        'Disaster almost certain — severe harm or loss likely',
+      ] : [
         'Very unfavourable — strongly argues against proceeding',
         'Unfavourable — leans against proceeding',
         'Mixed or unclear',
@@ -161,7 +170,7 @@ async function jevVerdict(question, ranked) {
       evaluations: ranked.map(c => ({
         criterion: c.label,
         context: c.context,
-        favourability_0_to_10: c.score,
+        favourability_0_to_10: c.id === 'certainty_of_catastrophe' ? 10 - c.score : c.score,
       })),
     },
     questions: {
