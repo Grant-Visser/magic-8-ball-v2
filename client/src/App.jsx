@@ -120,6 +120,27 @@ export default function App() {
         </button>
       </form>
 
+      <button
+        type="button"
+        className="share-btn"
+        onClick={copyLink}
+        disabled={!question.trim()}
+        style={{
+          margin: '10px auto 0',
+          display: 'block',
+          cursor: question.trim() ? 'pointer' : 'not-allowed',
+          background: 'none',
+          border: '1px solid rgba(255,255,255,.25)',
+          color: 'inherit',
+          opacity: question.trim() ? 1 : 0.4,
+          borderRadius: 8,
+          padding: '6px 14px',
+          fontSize: '0.9rem',
+        }}
+      >
+        {copied ? '✅ Link copied' : '🔗 Copy share link'}
+      </button>
+
       {error && <p className="error">⚠️ {error}</p>}
 
       {phase === 'answered' && result && (
@@ -143,23 +164,6 @@ export default function App() {
               </li>
             ))}
           </ul>
-          <button
-            type="button"
-            className="share-btn"
-            onClick={copyLink}
-            style={{
-              marginTop: 12,
-              cursor: 'pointer',
-              background: 'none',
-              border: '1px solid rgba(255,255,255,.25)',
-              color: 'inherit',
-              borderRadius: 8,
-              padding: '6px 14px',
-              fontSize: '0.9rem',
-            }}
-          >
-            {copied ? '✅ Link copied' : '🔗 Copy share link'}
-          </button>
           <p className="powered">ranked &amp; judged by <strong>JEV LATEST</strong> (1.13) · context by DeepSeek Flash · via OpenRouter</p>
         </div>
       )}
