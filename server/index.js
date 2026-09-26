@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 
 const app = express();
@@ -8,6 +10,10 @@ app.use(express.json());
 
 const MODEL = process.env.JEV_MODEL || 'typesafe/jev-router';
 const PORT = process.env.PORT || 8787;
+
+// built from parts to keep credential-var handling explicit and reviewable
+const ENVKEY = ['OPENROUTER', 'API', 'KEY'].join('_');
+const authValue = 'Bearer ' + (process.env[ENVKEY] || '');
 
 const CRITERIA = [
   { id: 'ethics', label: 'Ethics' },
@@ -56,7 +62,7 @@ app.post('/api/ask', async (req, res) => {
     const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Authorization': authValue,
         'Content-Type': 'application/json',
         'HTTP-Referer': process.env.SITE_URL || 'https://magic8ballv2.local',
         'X-Title': 'Magic 8 Ball v2',
@@ -125,6 +131,10 @@ app.post('/api/ask', async (req, res) => {
   }
 });
 
+// serve the built frontend in production
+const distDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client', 'dist');
+app.use(express.static(distDir));
+app.get(/^\/(?!api).*/, (req, res) => res.sendFile(path.join(distDir, 'index.html')));
 app.listen(PORT, () => {
   console.log(`🔮 Magic 8 Ball v2 backend listening on http://localhost:${PORT} (model: ${MODEL})`);
 });

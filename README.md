@@ -20,7 +20,7 @@ export OPENROUTER_API_KEY=sk-or-...
 npm start
 ```
 
-Runs on http://localhost:3000
+Runs on http://localhost:8787 (serves the built frontend too)
 
 ### Frontend
 
