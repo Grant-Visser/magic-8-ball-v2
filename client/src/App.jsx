@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const SHAKE_MS = 1100;
 
@@ -14,9 +14,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  const ask = async (e) => {
-    e.preventDefault();
-    const q = question.trim();
+  const runAsk = async (raw) => {
+    const q = raw.trim();
     if (!q || phase === 'shaking') return;
 
     setPhase('shaking');
@@ -46,6 +45,22 @@ export default function App() {
       }, Math.max(0, SHAKE_MS - (Date.now() - started)));
     }
   };
+
+  const ask = (e) => {
+    e.preventDefault();
+    runAsk(question);
+  };
+
+  // Shared links carry the question: /?q=Should%20I... — prefill and shake once.
+  useEffect(() => {
+    const shared = new URLSearchParams(window.location.search).get('q');
+    if (shared) {
+      const q = shared.slice(0, 500);
+      setQuestion(q);
+      runAsk(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const shaking = phase === 'shaking';
   const v = result ? VERDICT_STYLES[result.verdict] || VERDICT_STYLES.neutral : null;
@@ -112,7 +127,12 @@ export default function App() {
         </div>
       )}
 
-      <footer>ethical oracle · demo build</footer>
+      <footer>
+        ethical oracle · demo build ·{' '}
+        <a href="https://github.com/Grant-Visser/magic-8-ball-v2" target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>
+          source
+        </a>
+      </footer>
     </div>
   );
 }
