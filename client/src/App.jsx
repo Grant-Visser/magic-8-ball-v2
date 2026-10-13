@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const SHAKE_MS = 1100;
 
@@ -17,6 +17,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const inputRef = useRef(null);
 
   const runAsk = async (raw) => {
     const q = raw.trim();
@@ -59,7 +60,7 @@ export default function App() {
   useEffect(() => {
     const shared = new URLSearchParams(window.location.search).get('q');
     if (shared) {
-      const q = shared.slice(0, 500);
+      const q = shared.slice(0, 4096);
       setQuestion(q);
       runAsk(q);
     }
@@ -83,6 +84,13 @@ export default function App() {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const autosize = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 240) + 'px';
   };
 
   const shaking = phase === 'shaking';
@@ -111,12 +119,20 @@ export default function App() {
       </div>
 
       <form onSubmit={ask} className="ask-form">
-        <input
-          type="text"
+        <textarea
+          ref={inputRef}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
+          onInput={autosize}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              if (!shaking && question.trim()) e.currentTarget.form.requestSubmit();
+            }
+          }}
           placeholder="Ask the ball anything…"
-          maxLength={500}
+          maxLength={4096}
+          rows={1}
           disabled={shaking}
           autoFocus
         />

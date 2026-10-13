@@ -97,7 +97,7 @@ h1 .v2 {
   gap: 8px;
   width: 100%;
 }
-.ask-form input {
+.ask-form textarea {
   flex: 1;
   min-width: 0;
   padding: 13px 14px;
@@ -106,9 +106,15 @@ h1 .v2 {
   background: var(--panel);
   color: var(--text);
   font-size: 1rem;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: none;
+  overflow-y: auto;
+  min-height: 47px;
+  max-height: 240px;
 }
-.ask-form input::placeholder { color: var(--muted); }
-.ask-form input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.ask-form textarea::placeholder { color: var(--muted); }
+.ask-form textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
 
 .ask-form button {
   padding: 13px 20px;

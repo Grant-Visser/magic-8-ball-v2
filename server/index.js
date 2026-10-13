@@ -271,7 +271,7 @@ async function writeSummary(question, ranked, gate, gateScore, category) {
 app.post('/api/ask', async (req, res) => {
   const question = (req.body?.question || '').trim();
   if (!question) return res.status(400).json({ error: 'The ball needs a question.' });
-  if (question.length > 500) return res.status(400).json({ error: 'Keep it under 500 characters — even mystics have limits.' });
+  if (question.length > 4096) return res.status(400).json({ error: 'Keep it under 4096 characters — even mystics have limits.' });
 
   try {
     // Stage 1: cheap model adds question-specific context to the fixed criteria.
