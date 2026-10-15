@@ -129,15 +129,38 @@ Or run the upgrade script directly (use this for deployments made before the `up
 
 ## Docker / Compose
 
+One container: Express serves both the API and the built React client, mapped
+to host port 80.
+
+**Deploy:**
+
 ```bash
-cp server/.env.example server/.env   # set OPENROUTER_API_KEY
+git clone https://github.com/Grant-Visser/magic-8-ball-v2 && cd magic-8-ball-v2
+cp server/.env.example server/.env   # then set OPENROUTER_API_KEY
 docker compose up -d --build
 ```
 
-Serves everything on **http://localhost:80** — one container, Express handles
-both the API and the built React client. Healthcheck on `/`, restarts with
-`restart: unless-stopped`.
+**Check status / logs:**
 
-- Secrets come from `server/.env` via `env_file` — never baked into the image
-- Update after pulling changes: `docker compose up -d --build`
-- Teardown: `docker compose down` (add `--rmi local` to drop the image)
+```bash
+docker compose ps          # healthcheck should flip to "healthy"
+docker compose logs -f     # tail app logs
+```
+
+**Update after pulling changes:**
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+**Teardown:**
+
+```bash
+docker compose down                 # stop + remove
+docker compose down --rmi local    # also drop the built image
+```
+
+Secrets come from `server/.env` via `env_file` (`required: true`) — the stack
+refuses to start without `OPENROUTER_API_KEY`, and no secrets are baked into
+the image.
