@@ -2,3 +2,7 @@ node_modules/
 .env
 dist/
 *.log
+
+# Browser test output
+client/test-results/
+client/playwright-report/

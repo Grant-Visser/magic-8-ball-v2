@@ -1,53 +1,84 @@
 import { useEffect, useRef, useState } from 'react';
 
-const SHAKE_MS = 1100;
+const SHAKE_MS = 1200;
+const TURN_MS = 950;
+
+function pause(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(new DOMException('Aborted', 'AbortError')); };
+    const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, ms);
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
+
+// The moulded die has words, not sentence punctuation or verdict badges.
+export const displayAnswer = (answer = '') => answer
+  .replace(/[.,!?:;“”"‘’]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toUpperCase();
 
 // Criteria where a HIGH score is bad (red bar). Everything else: high = good.
 const BAD_HIGH = new Set(['downside_severity', 'risk_of_ruin', 'ethics_legality']);
 
-const VERDICT_STYLES = {
-  affirmative: { glow: '#39d98a', label: '✅ Affirmative' },
-  neutral: { glow: '#f5c542', label: '🤔 Unclear' },
-  negative: { glow: '#ff5c7a', label: '⛔ Negative' },
-};
-
 export default function App() {
   const [question, setQuestion] = useState('');
-  const [phase, setPhase] = useState('idle'); // idle | shaking | answered
+  const [phase, setPhase] = useState('idle'); // idle | resetting | shaking | waiting | answered
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const inputRef = useRef(null);
+  const requestRef = useRef(null);
+  const busyRef = useRef(false);
 
   const runAsk = async (raw) => {
     const q = raw.trim();
-    if (!q || phase === 'shaking') return;
-
-    setPhase('shaking');
-    setResult(null);
+    if (!q || busyRef.current) return;
+    busyRef.current = true;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const { signal } = controller;
     setError('');
+    setCopied(false);
 
-    const started = Date.now();
     try {
-      const r = await fetch('/api/ask', {
+      // Turn the previous window away before shaking the numbered side again.
+      if (phase === 'answered') {
+        setPhase('resetting');
+        await pause(500, signal);
+      }
+      setResult(null);
+      setPhase('shaking');
+      const request = fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),
+        signal,
+      }).then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'The ball refused to answer.');
+        return data;
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'The ball refused to answer.');
-
-      // let the shake play out fully for drama
-      const wait = Math.max(0, SHAKE_MS - (Date.now() - started));
-      setTimeout(() => {
-        setResult(data);
-        setPhase('answered');
-      }, wait);
+      // Attach the rejection handler immediately, even if the API fails mid-shake.
+      const [data] = await Promise.all([
+        request,
+        (async () => {
+          await pause(SHAKE_MS, signal);
+          setPhase('waiting');
+          await pause(TURN_MS, signal);
+        })(),
+      ]);
+      setResult(data);
+      setPhase('answered');
     } catch (err) {
-      setTimeout(() => {
+      if (err.name !== 'AbortError') {
+        controller.abort();
         setError(err.message);
         setPhase('idle');
-      }, Math.max(0, SHAKE_MS - (Date.now() - started)));
+      }
+    } finally {
+      if (requestRef.current === controller) busyRef.current = false;
     }
   };
 
@@ -64,6 +95,10 @@ export default function App() {
       setQuestion(q);
       runAsk(q);
     }
+    return () => {
+      requestRef.current?.abort();
+      busyRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -93,30 +128,44 @@ export default function App() {
     el.style.height = Math.min(el.scrollHeight, 240) + 'px';
   };
 
-  const shaking = phase === 'shaking';
-  const v = result ? VERDICT_STYLES[result.verdict] || VERDICT_STYLES.neutral : null;
+  const busy = ['resetting', 'shaking', 'waiting'].includes(phase);
+  const turned = phase === 'waiting' || phase === 'answered';
+  const answer = displayAnswer(result?.answer);
   const gatePct = result?.gate ? Math.round((result.gate.probability ?? result.gate.score / 10) * 100) : null;
   const gateColor = gatePct == null ? null : gatePct >= 70 ? '#ff5c7a' : gatePct >= 30 ? '#f5c542' : '#39d98a';
 
   return (
     <div className="app">
       <header>
-        <h1>🎱 Magic 8 Ball <span className="v2">v2</span></h1>
+        <h1>Magic 8 Ball <span className="v2">v2</span></h1>
         <p className="tagline">Not random. Judged.</p>
       </header>
 
-      <div className={'ball' + (shaking ? ' shaking' : '')} style={result ? { '--glow': v.glow } : {}}>
-        <div className="window">
-          {shaking && <span className="ghost">…</span>}
-          {phase === 'idle' && !error && <span className="eight">8</span>}
-          {phase === 'answered' && result && (
-            <div className="answer-wrap">
-              <span className="answer">{result.answer}</span>
-              {result.verdict && <span className="verdict">{v.label}</span>}
+      <div className={`ball-stage ${phase}`} aria-busy={busy}>
+        <div className="ball-shadow" aria-hidden="true" />
+        <div className="ball-motion" aria-hidden="true">
+          <div className="ball">
+            <div className={`ball-rotor${turned ? ' turned' : ''}`}>
+              <div className="ball-face number-face">
+                <div className="number-disc"><span>8</span></div>
+              </div>
+              <div className="ball-face answer-face">
+                <div className="window-rim">
+                  <div className="answer-window">
+                    <div className={`answer-die${phase === 'answered' ? ' surfaced' : ''}`}>
+                      <span className={`answer${answer.length > 22 ? ' answer-long' : ''}`}>{answer}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+            <div className="shell-reflection" />
+          </div>
         </div>
       </div>
+      <p className="ball-status" role="status" aria-live="polite" aria-atomic="true">
+        {phase === 'resetting' ? 'One more question' : phase === 'shaking' ? 'Shaking' : phase === 'waiting' ? 'Let the answer rise' : phase === 'answered' ? answer : 'Ask a question. Give it a shake.'}
+      </p>
 
       <form onSubmit={ask} className="ask-form">
         <textarea
@@ -127,17 +176,18 @@ export default function App() {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              if (!shaking && question.trim()) e.currentTarget.form.requestSubmit();
+              if (!busy && question.trim()) e.currentTarget.form.requestSubmit();
             }
           }}
+          aria-label="Your question"
           placeholder="Ask the ball anything…"
           maxLength={4096}
           rows={1}
-          disabled={shaking}
+          disabled={busy}
           autoFocus
         />
-        <button type="submit" disabled={shaking || !question.trim()}>
-          {shaking ? 'Consulting…' : 'Shake'}
+        <button type="submit" disabled={busy || !question.trim()}>
+          {busy ? 'Asking…' : 'Shake'}
         </button>
       </form>
 
@@ -159,14 +209,15 @@ export default function App() {
           fontSize: '0.9rem',
         }}
       >
-        {copied ? '✅ Link copied' : '🔗 Copy share link'}
+        {copied ? 'Link copied' : 'Copy share link'}
       </button>
 
-      {error && <p className="error">⚠️ {error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
 
       {phase === 'answered' && result && (
-        <div className="result">
-          {result.summary && <p className="summary">💬 {result.summary}</p>}
+        <details className="result">
+          <summary>Behind the answer</summary>
+          {result.summary && <p className="summary">{result.summary}</p>}
           <h2>Decision criteria</h2>
           <ul className="criteria">
             {(result.criteria || []).map((c) => (
@@ -194,7 +245,7 @@ export default function App() {
             </p>
           )}
           <p className="powered">ranked &amp; judged by <strong>~typesafe/jev-latest</strong> · context by DeepSeek Flash · via OpenRouter</p>
-        </div>
+        </details>
       )}
 
       <footer>
