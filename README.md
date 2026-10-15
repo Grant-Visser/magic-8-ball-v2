@@ -12,7 +12,7 @@ Four stages behind one `POST /api/ask`:
    writes one factual context sentence for each fixed criterion. It never
    invents criteria; it only explains what a high score means *for this
    question*. Falls back to static defaults if it fails.
-2. **Score** — JEV (1.14) scores all 10 criteria 0–10 in one Decisions API
+2. **Score** — `~typesafe/jev-latest` scores all 10 criteria 0–10 in one Decisions API
    call, plus an *Ethics & Legality* noul gate.
 3. **Verdict** — a second JEV pass receives the question, every score with its
    context, and the gate probability, then chooses the category:
@@ -76,9 +76,9 @@ Express serves `client/dist` and the SPA fallback — one port for everything.
 ## Configuration (server/.env)
 
 - `OPENROUTER_API_KEY` — required, get one at openrouter.ai
-- `JEV_MODEL` — decision model, default `typesafe/jev-1.14` (currently
-  resolves to snapshot `jev-1.14-20261014`). Pinned slugs take no `~` prefix;
-  `~typesafe/jev-latest` also tracks the newest release.
+- `JEV_MODEL` — decision model, default `~typesafe/jev-latest` (tracks the
+  newest JEV release; currently resolves to snapshot `jev-1.14-20261014`).
+  Pinned slugs like `typesafe/jev-1.14` take no `~` prefix.
 - `CHEAP_MODEL` — interpreter/summariser, default `~deepseek/deepseek-flash-latest`
 - `SITE_URL` — optional, OpenRouter attribution header
 - `PORT` — default 8787
@@ -103,7 +103,7 @@ Questions up to 4096 characters. Response:
   ],
   "gate": { "id": "ethics_legality", "label": "Ethics & Legality", "score": 1, "probability": 0.1, "reason": "…", "description": "…" },
   "confidence": 0.87,
-  "model": "typesafe/jev-1.14-20261014 + ~deepseek/deepseek-flash-latest"
+  "model": "~typesafe/jev-latest-20261014 + ~deepseek/deepseek-flash-latest"
 }
 ```
 
