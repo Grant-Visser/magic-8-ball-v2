@@ -8,10 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// JEV decision model. Pinned to 1.14 (current TypeSafe release; resolves to the
-// dated snapshot, currently jev-1.14-20261014). The ~typesafe/jev-latest alias
-// also tracks the newest release — note pinned slugs take no ~ prefix.
-const MODEL = process.env.JEV_MODEL || 'typesafe/jev-1.14';
+// JEV decision model. Uses the ~typesafe/jev-latest alias, which tracks the
+// newest TypeSafe release (currently 1.14, snapshot jev-1.14-20261014). Pin a
+// dated snapshot with typesafe/jev-1.14 — pinned slugs take no ~ prefix.
+const MODEL = process.env.JEV_MODEL || '~typesafe/jev-latest';
 // Cheap chat model: only provides per-criterion context. JEV does all judging.
 const CHEAP_MODEL = process.env.CHEAP_MODEL || '~deepseek/deepseek-flash-latest';
 const PORT = process.env.PORT || 8787;
