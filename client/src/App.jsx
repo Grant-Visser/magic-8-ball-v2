@@ -193,7 +193,7 @@ export default function App() {
               {' '}— weighed into the verdict, never a veto
             </p>
           )}
-          <p className="powered">ranked &amp; judged by <strong>JEV LATEST</strong> (1.13) · context by DeepSeek Flash · via OpenRouter</p>
+          <p className="powered">ranked &amp; judged by <strong>JEV 1.14</strong> · context by DeepSeek Flash · via OpenRouter</p>
         </div>
       )}
 
