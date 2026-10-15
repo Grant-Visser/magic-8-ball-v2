@@ -258,3 +258,14 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+/* A submerged, unlettered face moves gently while the oracle is working. */
+.waiting .answer-die {
+  opacity: .16;
+  filter: blur(5px);
+  animation: submerged 5s ease-in-out infinite alternate;
+}
+@keyframes submerged {
+  from { transform: translate(4px, 13px) scale(.76) rotate(-10deg); }
+  to { transform: translate(-4px, 6px) scale(.82) rotate(7deg); }
+}
+.resetting .answer-die { transition-duration: .3s; }

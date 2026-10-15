@@ -50,6 +50,10 @@ test('slow API stops shaking, prevents duplicate submits, then errors recover', 
   await expect(page.getByRole('alert')).toHaveText('Try again');
   await page.waitForTimeout(2300);
   await expect(page.locator('.ball-stage')).toHaveClass(/idle/);
+  await page.unroute('**/api/ask');
+  await page.route('**/api/ask', route => route.fulfill({ status: 502, contentType: 'text/html', body: '<h1>Bad gateway</h1>' }));
+  await shake(page);
+  await expect(page.getByRole('alert')).toHaveText('The ball is unavailable. Please try again.');
 });
 
 test('all twenty die answers fit at narrow mobile size with reduced motion', async ({ page }) => {

@@ -56,7 +56,9 @@ export default function App() {
         body: JSON.stringify({ question: q }),
         signal,
       }).then(async (r) => {
-        const data = await r.json();
+        const data = await r.json().catch(() => {
+          throw new Error('The ball is unavailable. Please try again.');
+        });
         if (!r.ok) throw new Error(data.error || 'The ball refused to answer.');
         return data;
       });
