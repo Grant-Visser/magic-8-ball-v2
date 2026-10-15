@@ -126,3 +126,18 @@ pct exec <CTID> -- update
 ```
 
 Or run the upgrade script directly (use this for deployments made before the `update` command shipped in the installer):
+
+## Docker / Compose
+
+```bash
+cp server/.env.example server/.env   # set OPENROUTER_API_KEY
+docker compose up -d --build
+```
+
+Serves everything on **http://localhost:80** — one container, Express handles
+both the API and the built React client. Healthcheck on `/`, restarts with
+`restart: unless-stopped`.
+
+- Secrets come from `server/.env` via `env_file` — never baked into the image
+- Update after pulling changes: `docker compose up -d --build`
+- Teardown: `docker compose down` (add `--rmi local` to drop the image)

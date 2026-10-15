@@ -1,0 +1,20 @@
+# Magic 8 Ball v2 — single-package deployment.
+# One container: Express serves the API (/api/ask) and the built React client
+# on the same port, so host port 80 is all users need.
+
+services:
+  magic-8-ball:
+    build: .
+    image: magic-8-ball-v2:latest
+    ports:
+      - "80:8787" # host :80 -> container PORT (8787)
+    env_file:
+      - path: ./server/.env
+        required: true # fail fast: without OPENROUTER_API_KEY the app can't answer
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
