@@ -122,5 +122,7 @@ Proxmox LXC install + upgrade scripts live in [`proxmox/`](proxmox/README.md).
 Upgrade a deployed container from the Proxmox host:
 
 ```bash
-pct exec <CTID> -- bash < <(curl -fsSL https://raw.githubusercontent.com/Grant-Visser/magic-8-ball-v2/main/proxmox/magic-8-ball-upgrade.sh)
+pct exec <CTID> -- update
 ```
+
+Or run the upgrade script directly:

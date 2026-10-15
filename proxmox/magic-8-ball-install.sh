@@ -114,6 +114,21 @@ systemctl enable magic-8-ball -q
 systemctl start magic-8-ball
 msg_ok "Service created and started"
 
+# ── Community-style update command ────────────────────────────────────────────
+# Community-scripts convention: containers ship an `update` command so
+# `pct exec <CTID> -- update` upgrades the app. Tooling that probes for it
+# (e.g. the Orangelabs-Ansible Proxmox LXC Update playbook) then works too.
+msg_info "Installing update command"
+cat <<'UPDSHIM' >/usr/bin/update
+#!/bin/sh
+# Magic 8 Ball v2 — community-scripts style update shim
+# Fetches the latest upgrade script from GitHub main, then runs it:
+# git pull -> npm ci -> frontend build -> service restart.
+exec bash -c "$(curl -fsSL https://raw.githubusercontent.com/Grant-Visser/magic-8-ball-v2/main/proxmox/magic-8-ball-upgrade.sh)"
+UPDSHIM
+chmod +x /usr/bin/update
+msg_ok "update command installed (/usr/bin/update)"
+
 # ── Verify ────────────────────────────────────────────────────────────────────
 sleep 2
 if systemctl is-active --quiet magic-8-ball; then

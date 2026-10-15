@@ -29,7 +29,13 @@ The script will:
 
 ## Upgrading
 
-Run this from the Proxmox host (upgrade script: git pull → deps → rebuild → restart):
+From the Proxmox host, either run the update command shipped inside the CT (community-scripts style):
+
+```bash
+pct exec <CTID> -- update
+```
+
+…or run the upgrade script directly (upgrade script: git pull → deps → rebuild → restart):
 
 ```bash
 pct exec <CTID> -- bash < <(curl -fsSL https://raw.githubusercontent.com/Grant-Visser/magic-8-ball-v2/main/proxmox/magic-8-ball-upgrade.sh)
