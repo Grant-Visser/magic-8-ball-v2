@@ -125,4 +125,4 @@ Upgrade a deployed container from the Proxmox host:
 pct exec <CTID> -- update
 ```
 
-Or run the upgrade script directly:
+Or run the upgrade script directly (use this for deployments made before the `update` command shipped in the installer):

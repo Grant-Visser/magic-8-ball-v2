@@ -204,5 +204,5 @@ if ! pct exec "$CTID" -- grep -q "^OPENROUTER_API_KEY=sk-or-[A-Za-z0-9]" /opt/ma
 fi
 echo ""
 echo -e "  ${DIM}To update the app later:${CL}"
-echo -e "    pct exec $CTID -- bash < <(curl -fsSL https://raw.githubusercontent.com/Grant-Visser/magic-8-ball-v2/main/proxmox/magic-8-ball-upgrade.sh)"
+echo -e "    pct exec $CTID -- update"
 echo ""

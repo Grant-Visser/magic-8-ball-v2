@@ -14,6 +14,7 @@ The script will:
 - Create a **Debian 13 LXC** (1 core, 512MB RAM, 4GB disk)
 - Install Node.js 22 LTS, clone the repo, build frontend + backend
 - Configure Nginx (port 80 → app on 8787) and a systemd service
+- Install an `update` command so `pct exec <CTID> -- update` upgrades the app later
 - Print the URL when done
 
 **Default mode** — just pick storage, everything else is automatic.
@@ -57,7 +58,7 @@ pct exec <CTID> -- bash -c 'cd /opt/magic-8-ball-v2 && git pull && cd server && 
 | Nginx 502 bad gateway | `systemctl status magic-8-ball` |
 | Build fails | `pct exec <CTID> -- node --version` — should be v22.x |
 | Answers are "cloudy" | Check `OPENROUTER_API_KEY` in `/opt/magic-8-ball-v2/server/.env` |
-| Model errors | Check `JEV_MODEL` in `.env` (default: `typesafe/jev-router`) |
+| Model errors | Check `JEV_MODEL` in `.env` (default: `~typesafe/jev-latest`, tracks the newest JEV release; pinned slugs like `typesafe/jev-1.14` take no `~` prefix) |
 
 ---
 
