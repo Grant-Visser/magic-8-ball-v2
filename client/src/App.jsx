@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const SHAKE_MS = 1200;
+const MIN_SHAKE_MS = 600; // floor so fast answers still feel like a shake
 const TURN_MS = 950;
 
 function pause(ms, signal) {
@@ -63,14 +63,15 @@ export default function App() {
         return data;
       });
       // Attach the rejection handler immediately, even if the API fails mid-shake.
+      // The ball keeps shaking until the answer lands (with a short minimum), then turns and reveals.
       const [data] = await Promise.all([
         request,
         (async () => {
-          await pause(SHAKE_MS, signal);
-          setPhase('waiting');
-          await pause(TURN_MS, signal);
+          await pause(MIN_SHAKE_MS, signal);
         })(),
       ]);
+      setPhase('waiting');
+      await pause(TURN_MS, signal);
       setResult(data);
       setPhase('answered');
     } catch (err) {

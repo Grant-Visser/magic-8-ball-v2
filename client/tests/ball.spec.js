@@ -29,7 +29,7 @@ test('numbered back, shake, turn, clean die, and repeated question', async ({ pa
   expect(errors).toEqual([]);
 });
 
-test('slow API stops shaking, prevents duplicate submits, then errors recover', async ({ page }) => {
+test('slow API keeps shaking until the answer lands, prevents duplicate submits, then errors recover', async ({ page }) => {
   let calls = 0;
   await page.route('**/api/ask', async route => {
     calls++;
@@ -39,7 +39,10 @@ test('slow API stops shaking, prevents duplicate submits, then errors recover', 
   await page.goto('/');
   await page.getByRole('textbox').fill('Should I try this?');
   await shake(page);
-  await expect(page.locator('.ball-stage')).toHaveClass(/waiting/);
+  // The ball keeps shaking while the answer is still being generated.
+  await expect(page.locator('.ball-stage')).toHaveClass(/shaking/);
+  await page.waitForTimeout(1400); // past the old fixed 1.2 s shake — must still be shaking
+  await expect(page.locator('.ball-stage')).toHaveClass(/shaking/);
   await expect(page.locator('.answer')).toBeEmpty();
   await expect(page.getByRole('button', { name: 'Asking…' })).toBeDisabled();
   await expect(page.locator('.ball-stage')).toHaveClass(/answered/);
@@ -75,9 +78,9 @@ test('all twenty die answers fit at narrow mobile size with reduced motion', asy
       const range = document.createRange();
       range.selectNodeContents(el);
       return [...range.getClientRects()].every(line => {
-        const halfWidth = ((line.top - die.top) / die.height - .02) / .87 * die.width / 2;
+        const halfWidth = ((line.top - die.top) / die.height - .05) / .79 * die.width / 2;
         const center = die.left + die.width / 2;
-        return line.left >= center - halfWidth && line.right <= center + halfWidth && line.bottom < die.top + die.height * .89;
+        return line.left >= center - halfWidth && line.right <= center + halfWidth && line.bottom < die.top + die.height * .84;
       }) && r.width + 1 >= el.scrollWidth;
     }, phrase);
     expect(fits, phrase).toBe(true);
